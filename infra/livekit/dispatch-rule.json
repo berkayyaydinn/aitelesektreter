@@ -1,0 +1,19 @@
+{
+  "_comment": "Gelen SIP çağrısını bir odaya yönlendirir ve voice-agent worker'ını dispatch eder. Çağrılan DID, agent'a metadata olarak geçer (DID -> tenant eşleme agent.py içinde backend'den yapılır).",
+  "dispatch_rule": {
+    "name": "telesekreter-dispatch",
+    "rule": {
+      "dispatchRuleIndividual": {
+        "roomPrefix": "call-"
+      }
+    },
+    "roomConfig": {
+      "agents": [
+        {
+          "agentName": "telesekreter",
+          "_metadata_note": "LiveKit SIP, çağrılan numarayı sip.trunkPhoneNumber attribute'unda iletir; agent.py _extract_did bunu okur."
+        }
+      ]
+    }
+  }
+}

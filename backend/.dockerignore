@@ -1,0 +1,7 @@
+# Build çıktıları + testler imaja girmesin (hız + temizlik).
+**/bin/
+**/obj/
+tests/
+*.db
+.env
+.env.*

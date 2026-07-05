@@ -1,0 +1,34 @@
+# Secrets / env
+.env
+*.env.local
+
+# .NET
+bin/
+obj/
+*.user
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Logs / data
+*.log
+*.db
+*.db-shm
+*.db-wal
+recordings/
+transcripts/
+
+# Test artifacts
+TestResults/
+.pytest_cache/
+.coverage
+htmlcov/

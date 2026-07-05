@@ -1,0 +1,15 @@
+# Reverse proxy + TLS. Domain henüz yok → Caddy kendi yerel CA'sı ile self-signed sertifika üretir
+# (tls internal). Tarayıcı "güvenilmeyen sertifika" uyarısı verir; iç/test kullanım için normaldir.
+#
+# Domain hazır olunca: ":443"i "api.firma.com" ile değiştir, "tls internal" satırını sil →
+# Caddy otomatik Let's Encrypt sertifikası alır ve yeniler.
+
+:443 {
+	tls internal
+	reverse_proxy backend:8080
+}
+
+# 80 → 443 yönlendir (düz HTTP gelirse TLS'e taşı).
+:80 {
+	redir https://{host}{uri} permanent
+}

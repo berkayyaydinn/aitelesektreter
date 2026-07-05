@@ -1,0 +1,289 @@
+# Self-hosted veritabanları — tek sunucuda PostgreSQL (ai-telesekreter) + MySQL (Mirbal CRM).
+#
+# Kullanım:  cp .env.example .env  &&  doldur  &&  docker compose up -d
+# Portlar yalnız 127.0.0.1'e bağlı (dışarı kapalı) — uygulamalar localhost üzerinden bağlanır.
+# Veriler named volume'da kalıcı (pgdata / mysqldata); `docker compose down` veriyi silmez,
+# silmek için `docker compose down -v`.
+
+name: telesekreter-stack
+
+services:
+  postgres:
+    image: postgres:16-alpine          # btree_gist contrib dahil → exclusion constraint migration'ı çalışır
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "127.0.0.1:5432:5432"          # sadece yerel; firewall ile dışarı kapalı tut
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── ai-telesekreter .NET API ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_PROVIDER: postgres
+      # Container ağı: host = postgres servis adı (yayınlanan porta gerek yok).
+      DATABASE_URL: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # Opsiyonel: tenant'a kısıtlı admin anahtarları "guid:key,guid:key" (CRM çok-tenant için).
+      INTERNAL_TENANT_KEYS: ${INTERNAL_TENANT_KEYS:-}
+      # Rate limit: X-Internal-Key (yoksa IP) başına istek/sn (varsayılan 50).
+      RATE_LIMIT_PER_SECOND: ${RATE_LIMIT_PER_SECOND:-50}
+      MESSAGING_PROVIDER: ${MESSAGING_PROVIDER:-console}
+      CRM_PROVIDER: ${CRM_PROVIDER:-none}
+      CRM_BASE_URL: ${CRM_BASE_URL:-}
+      CRM_API_KEY: ${CRM_API_KEY:-}
+      # SMS + hatırlatma (Netgsm)
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      NETGSM_USERCODE: ${NETGSM_USERCODE:-}
+      NETGSM_PASSWORD: ${NETGSM_PASSWORD:-}
+      NETGSM_MSGHEADER: ${NETGSM_MSGHEADER:-}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-true}
+      REMINDER_SCAN_INTERVAL_MINUTES: ${REMINDER_SCAN_INTERVAL_MINUTES:-5}
+      REMINDER_APPOINTMENT_LEAD_HOURS: ${REMINDER_APPOINTMENT_LEAD_HOURS:-24}
+      REMINDER_QUIET_START: ${REMINDER_QUIET_START:-09:00}
+      REMINDER_QUIET_END: ${REMINDER_QUIET_END:-21:00}
+      REMINDER_REQUIRE_CONSENT: ${REMINDER_REQUIRE_CONSENT:-true}
+      # Giden arama (Netgsm SIP — hat gelince)
+      OUTBOUND_DIALER: ${OUTBOUND_DIALER:-console}
+      NETGSM_SIP_OUTBOUND_TRUNK_ID: ${NETGSM_SIP_OUTBOUND_TRUNK_ID:-}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8080"   # yalnız iç ağ; dışarıya Caddy açar
+
+  # ── Python LiveKit voice worker ───────────────────────────────────────────
+  voice-agent:
+    build:
+      context: ../../voice-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BACKEND_BASE_URL: "http://backend:8080"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
+      # Self-host LiveKit (iç ağ). Cloud kullanılacaksa .env'de LIVEKIT_URL'i override et.
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      SPEECH_LANGUAGE: ${SPEECH_LANGUAGE:-tr}
+      STT_PROVIDER: ${STT_PROVIDER:-whisper}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      TTS_PROVIDER: ${TTS_PROVIDER:-piper}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Self-host STT/TTS (yerel OpenAI-uyumlu sunucular)
+      STT_BASE_URL: ${STT_BASE_URL:-http://whisper-stt:8000/v1}
+      STT_API_KEY: ${STT_API_KEY:-sk-local}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      TTS_BASE_URL: ${TTS_BASE_URL:-http://piper-tts:8000/v1}
+      TTS_API_KEY: ${TTS_API_KEY:-sk-local}
+      PIPER_MODEL: ${PIPER_MODEL:-piper}
+      PIPER_VOICE: ${PIPER_VOICE:-tr_TR-dfki-medium}
+      # Çağrı kaydı (opsiyonel; self-host MinIO'ya audio-only OGG)
+      RECORDING_ENABLED: ${RECORDING_ENABLED:-false}
+      RECORDING_S3_ENDPOINT: ${RECORDING_S3_ENDPOINT:-http://minio:9000}
+      RECORDING_S3_BUCKET: ${RECORDING_S3_BUCKET:-telesekreter-recordings}
+      RECORDING_S3_ACCESS_KEY: ${RECORDING_S3_ACCESS_KEY:-minioadmin}
+      RECORDING_S3_SECRET: ${RECORDING_S3_SECRET:-change-me-minio-secret}
+      RECORDING_S3_REGION: ${RECORDING_S3_REGION:-us-east-1}
+      # Bulut sağlayıcı geri dönüş kapısı (opsiyonel)
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY:-}
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-westeurope}
+      AZURE_TTS_VOICE: ${AZURE_TTS_VOICE:-tr-TR-EmelNeural}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+    depends_on:
+      - backend
+      - whisper-stt
+      - piper-tts
+      - livekit
+
+  # ── Self-host STT: OpenAI-uyumlu Whisper (faster-whisper, CPU) ─────────────
+  whisper-stt:
+    image: fedirz/faster-whisper-server:latest-cpu
+    restart: unless-stopped
+    environment:
+      WHISPER__MODEL: ${WHISPER_MODEL:-small}
+      WHISPER__INFERENCE_DEVICE: cpu
+      WHISPER__COMPUTE_TYPE: int8
+    volumes:
+      - whisper_cache:/root/.cache/huggingface
+    expose:
+      - "8000"   # /v1/audio/transcriptions (yalnız iç ağ)
+
+  # ── Self-host TTS: OpenAI-uyumlu Piper (openedai-speech) ───────────────────
+  piper-tts:
+    image: ghcr.io/matatonic/openedai-speech:latest
+    restart: unless-stopped
+    volumes:
+      - piper_voices:/app/voices
+    expose:
+      - "8000"   # /v1/audio/speech (yalnız iç ağ)
+
+  # ── Self-host LiveKit için Redis (server + SIP paylaşır) ───────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose:
+      - "6379"   # yalnız iç ağ
+
+  # ── Self-host LiveKit server (SIP/WebRTC ses motoru) ───────────────────────
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      # Anahtarlar env'den (config dosyası env interpolasyonu yapmaz).
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
+    volumes:
+      - ../livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"                      # WebSocket/HTTP (agent + SIP bağlanır)
+      - "7881:7881"                      # RTC over TCP (fallback)
+      - "50000-60000:50000-60000/udp"    # RTC medya (UDP) — firewall'da aç
+    depends_on:
+      - redis
+
+  # ── Self-host LiveKit SIP (Netgsm SIP trunk → LiveKit) ─────────────────────
+  livekit-sip:
+    image: livekit/sip:latest
+    restart: unless-stopped
+    command: ["--config", "/etc/sip.yaml"]
+    environment:
+      SIP_API_KEY: ${LIVEKIT_API_KEY}
+      SIP_API_SECRET: ${LIVEKIT_API_SECRET}
+    volumes:
+      - ../livekit/sip.yaml:/etc/sip.yaml:ro
+    ports:
+      - "5060:5060/udp"                  # SIP signaling — yalnız Netgsm IP'sine firewall'da aç
+      - "5060:5060/tcp"
+      - "10000-20000:10000-20000/udp"    # RTP medya — firewall'da aç
+    depends_on:
+      - redis
+      - livekit
+
+  # ── Self-host nesne deposu (çağrı kaydı için S3-uyumlu) ────────────────────
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${RECORDING_S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${RECORDING_S3_SECRET:-change-me-minio-secret}
+    volumes:
+      - miniodata:/data
+    expose:
+      - "9000"   # S3 API (yalnız iç ağ)
+      - "9001"   # konsol (yalnız iç ağ; gerekirse SSH tüneliyle eriş)
+
+  # ── Kayıt bucket'ını bir kez oluştur (one-shot) ───────────────────────────
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do sleep 2; done;
+      mc mb -p local/$${RECORDING_S3_BUCKET} || true;
+      echo 'bucket hazır';
+      "
+    environment:
+      MINIO_ROOT_USER: ${RECORDING_S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${RECORDING_S3_SECRET:-change-me-minio-secret}
+      RECORDING_S3_BUCKET: ${RECORDING_S3_BUCKET:-telesekreter-recordings}
+    depends_on:
+      - minio
+
+  # ── LiveKit Egress (çağrı kaydı: audio-only → MinIO) ───────────────────────
+  # NOT: RoomComposite egress headless Chrome çalıştırır → CPU-only VPS'te en ağır bileşen.
+  # RECORDING_ENABLED=false iken agent egress başlatmaz; bu servis boşta durur (zararsız).
+  livekit-egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    command: ["--config", "/etc/egress.yaml"]
+    environment:
+      EGRESS_API_KEY: ${LIVEKIT_API_KEY}
+      EGRESS_API_SECRET: ${LIVEKIT_API_SECRET}
+    volumes:
+      - ../livekit/egress.yaml:/etc/egress.yaml:ro
+    depends_on:
+      - redis
+      - livekit
+
+  # ── Reverse proxy + TLS (domain yokken self-signed/internal CA) ────────────
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  # ── Günlük yedek (pg_dump + mysqldump), 7 gün saklama ─────────────────────
+  backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  mysqldata:
+  caddy_data:
+  caddy_config:
+  backups:
+  whisper_cache:
+  piper_voices:
+  miniodata:

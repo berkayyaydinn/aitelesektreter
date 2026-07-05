@@ -1,0 +1,15 @@
+# Self-host LiveKit Egress config (çağrı kaydı). api_key/secret EGRESS_API_KEY/SECRET env'inden
+# gelir (LiveKit server anahtarlarıyla AYNI olmalı). docker-compose.yml `livekit-egress`
+# servisi bunu /etc/egress.yaml olarak mount eder.
+#
+# S3/MinIO hedefi burada DEĞİL — egress isteğinde (voice-agent agent.py) verilir, böylece
+# kayıt bucket/endpoint/anahtarları tek yerde (.env) kalır.
+
+redis:
+  address: redis:6379       # LiveKit server ile aynı redis (worker kaydı buradan)
+ws_url: ws://livekit:7880   # iç ağ; egress worker LiveKit server'a buradan bağlanır
+
+logging:
+  level: info
+
+# api_key / api_secret: EGRESS_API_KEY / EGRESS_API_SECRET env (compose) — config'e yazılmaz.

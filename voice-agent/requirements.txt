@@ -1,0 +1,14 @@
+# LiveKit Agents ses hattı
+livekit-agents>=0.11
+livekit-plugins-silero>=0.7        # VAD / turn detection
+
+# Swappable provider eklentileri (.env ile seçilir; sadece kullanılanı kur)
+livekit-plugins-deepgram>=0.6      # STT (Türkçe)
+livekit-plugins-openai>=0.10       # LLM (GPT-4o-mini) + alternatif STT/TTS
+livekit-plugins-azure>=0.5         # STT/TTS (Azure Neural Türkçe)
+livekit-plugins-elevenlabs>=0.7    # TTS alternatif
+
+# Backend internal API istemcisi
+httpx>=0.27
+python-dotenv>=1.0
+pydantic>=2.7

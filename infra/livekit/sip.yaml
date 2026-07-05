@@ -1,0 +1,18 @@
+# Self-host LiveKit SIP servis config. api_key/secret SIP_API_KEY/SIP_API_SECRET env'inden gelir.
+# docker-compose.yml `livekit-sip` servisi bunu /etc/sip.yaml olarak mount eder.
+# Netgsm SIP trunk → bu servis (5060) → LiveKit server (ws_url) → oda + agent.
+
+ws_url: ws://livekit:7880   # iç ağ; SIP servisi LiveKit server'a buradan bağlanır
+redis:
+  address: redis:6379
+
+sip_port: 5060              # SIP signaling (UDP+TCP) — yalnız Netgsm IP'sine firewall'da aç
+rtp_port_range_start: 10000 # RTP medya UDP aralığı — compose + firewall ile eşleşmeli
+rtp_port_range_end: 20000
+use_external_ip: true       # VPS public IP (NAT arkası RTP için)
+
+logging:
+  level: info
+
+# Not: api_key/api_secret env'den (SIP_API_KEY/SIP_API_SECRET) — LiveKit server anahtarlarıyla
+# AYNI olmalı. Inbound trunk + dispatch rule `lk` CLI ile uygulanır (infra/livekit/README.md).

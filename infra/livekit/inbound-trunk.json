@@ -1,0 +1,12 @@
+{
+  "_comment": "LiveKit SIP inbound trunk. TR SIP sağlayıcıdan (Verimor/NetGSM) gelen çağrıları kabul eder. lk sip inbound create inbound-trunk.json ile uygulanır.",
+  "trunk": {
+    "name": "tr-sip-inbound",
+    "numbers": ["+90850XXXXXXX"],
+    "_numbers_note": "Tenant'lara tahsis edilen DID listesi. Yeni tenant = yeni DID buraya eklenir veya wildcard routing kullanılır.",
+    "allowed_addresses": ["SIP_PROVIDER_IP/32"],
+    "_auth_note": "TR sağlayıcı IP auth verir; gerekirse auth_username/auth_password ekle.",
+    "media_encryption": "SIP_MEDIA_ENCRYPT_DISABLE",
+    "_codec_note": "G.711 (PCMU/PCMA) — TR sağlayıcı + LiveKit uyumu için. docs/spikes.md Spike 1."
+  }
+}
