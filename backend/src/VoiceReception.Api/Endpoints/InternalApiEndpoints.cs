@@ -40,7 +40,8 @@ public static class InternalApiEndpoints
             .ToList();
 
         return Results.Ok(new TenantConfigResponse(
-            t.Id.ToString(), t.BusinessName, t.ExtraPrompt, hoursText, services, t.OwnerPhone));
+            t.Id.ToString(), t.BusinessName, t.ExtraPrompt, hoursText, services, t.OwnerPhone,
+            t.PromptTemplate));
     }
 
     /// <summary>Fatura keser. SADECE işletme sahibi: callerPhone == tenant.OwnerPhone, yoksa 403.</summary>

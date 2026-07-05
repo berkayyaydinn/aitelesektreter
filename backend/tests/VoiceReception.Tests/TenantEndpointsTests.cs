@@ -100,6 +100,65 @@ public class TenantEndpointsTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Put_persists_prompt_template_and_by_did_returns_it()
+    {
+        var did = UniqueDid();
+        var tid = await CreateTenantAsync(did);
+
+        const string template = "Sen {business_name} için çalışan neşeli bir asistansın. "
+            + "Hizmetler: {services}. Saatler: {business_hours}. Önce isim sor.";
+        var put = await _client.SendAsync(Keyed(HttpMethod.Put, $"/api/tenants/{tid}", new
+        {
+            businessName = "Şablonlu İşletme",
+            promptTemplate = template,
+        }));
+        put.EnsureSuccessStatusCode();
+
+        // Admin GET döner.
+        var get = await _client.SendAsync(Keyed(HttpMethod.Get, $"/api/tenants/{tid}"));
+        var json = await get.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(template, json.GetProperty("promptTemplate").GetString());
+
+        // Voice worker'ın çektiği by-did config de döner.
+        var bd = await _client.SendAsync(Keyed(HttpMethod.Get, $"/internal/tenants/by-did/{did}"));
+        bd.EnsureSuccessStatusCode();
+        var bdJson = await bd.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(template, bdJson.GetProperty("promptTemplate").GetString());
+    }
+
+    [Fact]
+    public async Task Put_rejects_prompt_template_over_max_length()
+    {
+        var did = UniqueDid();
+        var tid = await CreateTenantAsync(did);
+
+        var put = await _client.SendAsync(Keyed(HttpMethod.Put, $"/api/tenants/{tid}", new
+        {
+            businessName = "X",
+            promptTemplate = new string('a', 4001),
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, put.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_accepts_prompt_template()
+    {
+        var did = UniqueDid();
+        var resp = await _client.SendAsync(Keyed(HttpMethod.Post, "/api/tenants", new
+        {
+            businessName = "Doğuştan Şablonlu",
+            did,
+            promptTemplate = "Sen {business_name} asistanısın.",
+        }));
+        resp.EnsureSuccessStatusCode();
+        var tid = (await resp.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tenantId").GetString()!;
+
+        var get = await _client.SendAsync(Keyed(HttpMethod.Get, $"/api/tenants/{tid}"));
+        var json = await get.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Sen {business_name} asistanısın.", json.GetProperty("promptTemplate").GetString());
+    }
+
+    [Fact]
     public async Task Put_then_by_did_reflects_extra_prompt_end_to_end()
     {
         var did = UniqueDid();

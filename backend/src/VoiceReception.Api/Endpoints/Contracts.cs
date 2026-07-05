@@ -51,6 +51,7 @@ public record TenantConfigResponse(
     string? ExtraPrompt,
     string BusinessHoursText,
     IReadOnlyList<TenantServiceDto> Services,
-    string? OwnerPhone);   // sahip moduna geçiş için (fatura kesme)
+    string? OwnerPhone,       // sahip moduna geçiş için (fatura kesme)
+    string? PromptTemplate);  // CRM şablon konuşma promptu (yer tutucular agent'ta render edilir)
 
 public record TenantServiceDto(string Id, string Name, int DurationMinutes);

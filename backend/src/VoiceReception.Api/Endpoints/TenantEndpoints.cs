@@ -8,6 +8,14 @@ namespace VoiceReception.Api.Endpoints;
 /// MVP: minimal — tenant oluştur, DID ata, yönlendirme talimatı döndür.</summary>
 public static class TenantEndpoints
 {
+    /// <summary>CRM şablon promptu üst sınırı — LLM bağlamını ve TTS maliyetini korur.</summary>
+    public const int PromptTemplateMaxLength = 4000;
+
+    private static IResult? ValidatePromptTemplate(string? template) =>
+        template?.Length > PromptTemplateMaxLength
+            ? Results.BadRequest(new { error = $"promptTemplate en fazla {PromptTemplateMaxLength} karakter olabilir" })
+            : null;
+
     public static void MapTenantApi(this IEndpointRouteBuilder app)
     {
         // Onboarding da anahtar ister: master (CRM) ya da kendi tenant'ına kısıtlı scoped anahtar.
@@ -19,10 +27,12 @@ public static class TenantEndpoints
         // Tenant oluştur + DID tahsis et + yönlendirme talimatı döndür.
         group.MapPost("/", async (CreateTenantBody body, AppDbContext db, CancellationToken ct) =>
         {
+            if (ValidatePromptTemplate(body.PromptTemplate) is { } invalid) return invalid;
             var tenant = new Tenant
             {
                 BusinessName = body.BusinessName,
                 ExtraPrompt = body.ExtraPrompt,
+                PromptTemplate = body.PromptTemplate,
                 OwnerPhone = body.OwnerPhone,
             };
             db.Tenants.Add(tenant);
@@ -108,6 +118,7 @@ public static class TenantEndpoints
                 tenantId = t.Id,
                 businessName = t.BusinessName,
                 extraPrompt = t.ExtraPrompt,
+                promptTemplate = t.PromptTemplate,
                 ownerPhone = t.OwnerPhone,
                 isActive = t.IsActive,
             });
@@ -117,11 +128,13 @@ public static class TenantEndpoints
         admin.MapPut("/{tenantId:guid}",
             async (Guid tenantId, UpdateTenantBody body, AppDbContext db, CancellationToken ct) =>
         {
+            if (ValidatePromptTemplate(body.PromptTemplate) is { } invalid) return invalid;
             var t = await db.Tenants.FirstOrDefaultAsync(x => x.Id == tenantId, ct);
             if (t is null) return Results.NotFound();
 
             t.BusinessName = body.BusinessName;
             t.ExtraPrompt = body.ExtraPrompt;
+            t.PromptTemplate = body.PromptTemplate;
             t.OwnerPhone = body.OwnerPhone;
             if (body.IsActive.HasValue) t.IsActive = body.IsActive.Value;
 
@@ -141,8 +154,12 @@ public static class TenantEndpoints
         });
     }
 
-    public record CreateTenantBody(string BusinessName, string Did, string? ExtraPrompt, string? OwnerPhone);
+    public record CreateTenantBody(
+        string BusinessName, string Did, string? ExtraPrompt, string? OwnerPhone,
+        string? PromptTemplate = null);
     public record AddServiceBody(string Name, int DurationMinutes);
     public record HourBody(int Day, string Open, string Close, bool IsClosed);
-    public record UpdateTenantBody(string BusinessName, string? ExtraPrompt, string? OwnerPhone, bool? IsActive);
+    public record UpdateTenantBody(
+        string BusinessName, string? ExtraPrompt, string? OwnerPhone, bool? IsActive,
+        string? PromptTemplate = null);
 }

@@ -9,6 +9,12 @@ public class Tenant
     /// <summary>Ses ajanına eklenecek işletmeye özel ek talimat (opsiyonel).</summary>
     public string? ExtraPrompt { get; set; }
 
+    /// <summary>CRM'den yönetilen şablon konuşma promptu (opsiyonel). Yer tutucular
+    /// ({business_name}, {services}, {business_hours}) voice-agent'ta render edilir.
+    /// Boşsa ajan varsayılan iskelet promptu kullanır. KVKK/araç guardrail'leri şablonun
+    /// üzerine her zaman eklenir — şablon bunları geçersiz kılamaz.</summary>
+    public string? PromptTemplate { get; set; }
+
     /// <summary>İşletme sahibinin telefon numarası. Bu numaradan arandığında sahip moduna geçilir
     /// (fatura kesme). Sahip doğrulaması bununla yapılır.</summary>
     public string? OwnerPhone { get; set; }
