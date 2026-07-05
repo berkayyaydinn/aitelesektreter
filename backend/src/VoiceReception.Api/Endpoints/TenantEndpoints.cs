@@ -10,7 +10,11 @@ public static class TenantEndpoints
 {
     public static void MapTenantApi(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/tenants");
+        // Onboarding da anahtar ister: master (CRM) ya da kendi tenant'ına kısıtlı scoped anahtar.
+        // POST / route'unda {tenantId} yok → scoped anahtar tenant oluşturamaz (403), sadece master.
+        var group = app.MapGroup("/api/tenants")
+            .AddEndpointFilter(InternalKey.Filter)
+            .AddEndpointFilter(InternalKey.RequireTenantScope);
 
         // Tenant oluştur + DID tahsis et + yönlendirme talimatı döndür.
         group.MapPost("/", async (CreateTenantBody body, AppDbContext db, CancellationToken ct) =>

@@ -10,7 +10,7 @@ namespace VoiceReception.Tests;
 public class NetsantralEndpointsTests : IClassFixture<ApiFactory>
 {
     private readonly HttpClient _client;
-    public NetsantralEndpointsTests(ApiFactory factory) => _client = factory.CreateClient();
+    public NetsantralEndpointsTests(ApiFactory factory) => _client = factory.CreateKeyedClient();
 
     private static string UniqueDid() => $"0850{Random.Shared.Next(1_000_000, 9_999_999)}";
 

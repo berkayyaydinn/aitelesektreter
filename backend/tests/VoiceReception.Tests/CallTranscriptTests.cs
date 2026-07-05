@@ -16,7 +16,7 @@ public class CallTranscriptTests : IClassFixture<ApiFactory>
     public CallTranscriptTests(ApiFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateKeyedClient();
     }
 
     private HttpRequestMessage Keyed(HttpMethod method, string url, object? body = null)

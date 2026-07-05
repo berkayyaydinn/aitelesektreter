@@ -15,7 +15,7 @@ public class HardeningTests : IClassFixture<ApiFactory>
     public HardeningTests(ApiFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
+        _client = factory.CreateKeyedClient();
     }
 
     private static HttpRequestMessage Keyed(HttpMethod method, string url, string key, object? body = null)

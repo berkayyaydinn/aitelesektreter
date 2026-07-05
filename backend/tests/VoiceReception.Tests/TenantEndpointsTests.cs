@@ -8,9 +8,14 @@ namespace VoiceReception.Tests;
 /// <summary>Tenant config GET/PUT (CRM admin paneli) — X-Internal-Key korumalı.</summary>
 public class TenantEndpointsTests : IClassFixture<ApiFactory>
 {
+    private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
-    public TenantEndpointsTests(ApiFactory factory) => _client = factory.CreateClient();
+    public TenantEndpointsTests(ApiFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateKeyedClient();
+    }
 
     private HttpRequestMessage Keyed(HttpMethod method, string url, object? body = null)
     {
@@ -32,14 +37,14 @@ public class TenantEndpointsTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Get_config_requires_key()
     {
-        var resp = await _client.GetAsync($"/api/tenants/{Guid.NewGuid()}");
+        var resp = await _factory.CreateClient().GetAsync($"/api/tenants/{Guid.NewGuid()}");
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 
     [Fact]
     public async Task Put_config_requires_key()
     {
-        var resp = await _client.PutAsJsonAsync($"/api/tenants/{Guid.NewGuid()}",
+        var resp = await _factory.CreateClient().PutAsJsonAsync($"/api/tenants/{Guid.NewGuid()}",
             new { businessName = "X" });
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }

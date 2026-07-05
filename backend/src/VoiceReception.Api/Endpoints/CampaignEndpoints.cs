@@ -11,8 +11,13 @@ public static class CampaignEndpoints
 {
     public static void MapCampaignApi(this IEndpointRouteBuilder app)
     {
-        var tenant = app.MapGroup("/api/tenants/{tenantId:guid}/campaigns");
-        var campaign = app.MapGroup("/api/campaigns/{campaignId:guid}");
+        // CRM/dashboard uçları: master ya da scoped anahtar zorunlu (InternalKey).
+        var tenant = app.MapGroup("/api/tenants/{tenantId:guid}/campaigns")
+            .AddEndpointFilter(InternalKey.Filter)
+            .AddEndpointFilter(InternalKey.RequireTenantScope);
+        var campaign = app.MapGroup("/api/campaigns/{campaignId:guid}")
+            .AddEndpointFilter(InternalKey.Filter)
+            .AddEndpointFilter(RequireCampaignScope);
 
         // Kampanya oluştur.
         tenant.MapPost("/", async (Guid tenantId, CreateCampaignBody body, AppDbContext db, CancellationToken ct) =>
@@ -79,6 +84,28 @@ public static class CampaignEndpoints
                 .ToListAsync(ct);
             return Results.Ok(new { c.Id, c.Name, status = c.Status.ToString(), targets = breakdown });
         });
+    }
+
+    /// <summary>Scoped anahtar, yalnız kendi tenant'ının kampanyasına dokunabilir (403).
+    /// Master anahtarla no-op; kampanya yoksa handler'ın 404'üne bırakılır.</summary>
+    private static async ValueTask<object?> RequireCampaignScope(
+        EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
+    {
+        if (ctx.HttpContext.Items.TryGetValue(InternalKey.ScopedTenantItem, out var raw) && raw is Guid scopedTenant)
+        {
+            var routeCampaign = ctx.HttpContext.Request.RouteValues["campaignId"]?.ToString();
+            if (Guid.TryParse(routeCampaign, out var campaignId))
+            {
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                var ownerTenant = await db.Campaigns
+                    .Where(c => c.Id == campaignId)
+                    .Select(c => (Guid?)c.TenantId)
+                    .FirstOrDefaultAsync(ctx.HttpContext.RequestAborted);
+                if (ownerTenant is not null && ownerTenant != scopedTenant)
+                    return Results.Json(new { error = "Bu kampanyaya erişim yetkisi yok" }, statusCode: 403);
+            }
+        }
+        return await next(ctx);
     }
 
     public record CreateCampaignBody(string Name, string ScriptPrompt);

@@ -9,9 +9,14 @@ namespace VoiceReception.Tests;
 /// scripts/smoke_test.py'nin otomatik test karşılığı.</summary>
 public class ApiIntegrationTests : IClassFixture<ApiFactory>
 {
+    private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
-    public ApiIntegrationTests(ApiFactory factory) => _client = factory.CreateClient();
+    public ApiIntegrationTests(ApiFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateKeyedClient();
+    }
 
     private HttpRequestMessage Keyed(HttpMethod method, string url, object? body = null)
     {
@@ -35,7 +40,7 @@ public class ApiIntegrationTests : IClassFixture<ApiFactory>
     public async Task Internal_api_requires_key()
     {
         // Anahtarsız internal çağrı -> 401.
-        var resp = await _client.PostAsJsonAsync("/internal/availability",
+        var resp = await _factory.CreateClient().PostAsJsonAsync("/internal/availability",
             new { tenantId = Guid.NewGuid(), serviceId = Guid.NewGuid(), date = "2026-06-15" });
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }

@@ -76,19 +76,20 @@ def main() -> int:
     owner = "+905550009999"
     st, t = _req("POST", "/api/tenants",
                  {"businessName": "Berkay Kuafor", "did": DID, "extraPrompt": "Erkek kuaforu.",
-                  "ownerPhone": owner})
+                  "ownerPhone": owner}, key=KEY)
     check("tenant created", st == 200 and bool(t), f"status={st}")
     tid, did = t["tenantId"], t["did"]
     check("forwarding instruction", t.get("forwardingInstruction") == f"**21*{DID}#", str(t))
 
     # 3) hizmet ekle (45 dk)
-    st, s = _req("POST", f"/api/tenants/{tid}/services", {"name": "Sac kesimi", "durationMinutes": 45})
+    st, s = _req("POST", f"/api/tenants/{tid}/services", {"name": "Sac kesimi", "durationMinutes": 45},
+                 key=KEY)
     check("service added", st == 200 and bool(s), f"status={st}")
     sid = s["serviceId"]
 
     # 4) Pazartesi 09:00-12:00 (Day=1)
     st, _ = _req("PUT", f"/api/tenants/{tid}/hours",
-                 [{"day": 1, "open": "09:00", "close": "12:00", "isClosed": False}])
+                 [{"day": 1, "open": "09:00", "close": "12:00", "isClosed": False}], key=KEY)
     check("hours set", st == 200, f"status={st}")
 
     print("-- internal API (voice worker sözleşmesi) --")

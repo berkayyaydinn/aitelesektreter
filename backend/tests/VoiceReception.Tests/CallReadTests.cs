@@ -8,9 +8,14 @@ namespace VoiceReception.Tests;
 /// <summary>Çağrı okuma API — liste + detay + auth + tenant izolasyonu.</summary>
 public class CallReadTests : IClassFixture<ApiFactory>
 {
+    private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
-    public CallReadTests(ApiFactory factory) => _client = factory.CreateClient();
+    public CallReadTests(ApiFactory factory)
+    {
+        _factory = factory;
+        _client = factory.CreateKeyedClient();
+    }
 
     private HttpRequestMessage Keyed(HttpMethod method, string url, object? body = null)
     {
@@ -32,7 +37,7 @@ public class CallReadTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task List_requires_internal_key()
     {
-        var resp = await _client.GetAsync($"/api/tenants/{Guid.NewGuid()}/calls");
+        var resp = await _factory.CreateClient().GetAsync($"/api/tenants/{Guid.NewGuid()}/calls");
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
 

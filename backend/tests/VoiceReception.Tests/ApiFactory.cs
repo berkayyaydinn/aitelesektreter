@@ -43,6 +43,15 @@ public class ApiFactory : WebApplicationFactory<Program>
         return base.CreateHost(builder);
     }
 
+    /// <summary>Her isteğe X-Internal-Key ekleyen client — auth gerektiren uçları test ederken kullanılır.
+    /// (İstek kendi header'ını taşıyorsa default uygulanmaz; Keyed() helper'larıyla çakışmaz.)</summary>
+    public HttpClient CreateKeyedClient()
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add("X-Internal-Key", Key);
+        return client;
+    }
+
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
