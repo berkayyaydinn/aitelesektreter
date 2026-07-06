@@ -11,6 +11,7 @@ using VoiceReception.Api.Messaging;
 using VoiceReception.Api.Messaging.Sms;
 using VoiceReception.Api.Outbound;
 using VoiceReception.Api.Reminders;
+using VoiceReception.Api.Retention;
 using VoiceReception.Api.Scheduling;
 
 Env.TraversePath().Load(); // .env'i ortam değişkeni olarak yükler (varsa)
@@ -88,6 +89,12 @@ else
 // REMINDERS_ENABLED=false -> kapalı (entegrasyon testleri deterministik kalsın).
 if ((builder.Configuration["REMINDERS_ENABLED"] ?? "true").ToLowerInvariant() != "false")
     builder.Services.AddHostedService<ReminderDispatcher>();
+
+// --- KVKK saklama/imha taraması (arka plan servisi) ---
+// Süresi dolan çağrı logu/transkript/kayıt/mesaj logunu imha eder, PII'yi anonimleştirir.
+// RETENTION_ENABLED=false -> kapalı (entegrasyon testleri deterministik kalsın).
+if ((builder.Configuration["RETENTION_ENABLED"] ?? "true").ToLowerInvariant() != "false")
+    builder.Services.AddHostedService<RetentionSweeper>();
 
 // --- Giden kampanya + İYS (swappable) ---
 // İYS onay istemcisi: lokal (Consents tablosu) | (üretim: gerçek İYS API)

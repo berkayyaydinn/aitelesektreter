@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<CampaignTarget> CampaignTargets => Set<CampaignTarget>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<RetentionRun> RetentionRuns => Set<RetentionRun>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -46,6 +47,10 @@ public class AppDbContext : DbContext
 
         // Çağrı transkripti — tura göre sıralı okuma (çağrı + zaman).
         b.Entity<ConversationTurn>().HasIndex(t => new { t.CallLogId, t.OccurredAt });
+
+        // Retention taramaları (yaş kesme noktası sorguları).
+        b.Entity<CallLog>().HasIndex(c => c.StartedAt);
+        b.Entity<MessageLog>().HasIndex(m => m.CreatedAt);
 
         // Soft-delete: silinmiş kayıtlar tüm sorgulardan otomatik gizlenir (geçmiş korunur).
         b.Entity<Tenant>().HasQueryFilter(t => !t.IsDeleted);

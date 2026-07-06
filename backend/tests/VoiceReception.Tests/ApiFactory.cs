@@ -28,6 +28,7 @@ public class ApiFactory : WebApplicationFactory<Program>
                 ["MESSAGING_PROVIDER"] = "console",
                 ["SMS_PROVIDER"] = "console",
                 ["REMINDERS_ENABLED"] = "false", // arka plan döngüsü testlerde deterministik olsun
+                ["RETENTION_ENABLED"] = "false", // imha taraması testlerde deterministik olsun
                 ["INTERNAL_API_KEY"] = Key,
                 ["NETSANTRAL_WEBHOOK_TOKEN"] = NetsantralToken,
                 ["NETSANTRAL_AGENT_DID"] = NetsantralAgentDid,
