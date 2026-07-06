@@ -21,3 +21,32 @@ def test_load_raises_when_required_missing(monkeypatch):
     monkeypatch.setenv("INTERNAL_API_KEY", "k")
     with pytest.raises(RuntimeError):
         Settings.load()
+
+
+def test_latency_defaults(monkeypatch):
+    monkeypatch.setenv("BACKEND_BASE_URL", "http://x")
+    monkeypatch.setenv("INTERNAL_API_KEY", "k")
+    for key in ("TURN_DETECTION", "MIN_ENDPOINTING_DELAY",
+                "MAX_ENDPOINTING_DELAY", "TOOL_TIMEOUT_SECONDS"):
+        monkeypatch.delenv(key, raising=False)
+
+    s = Settings.load()
+    assert s.turn_detection == "multilingual"
+    assert s.min_endpointing_delay == 0.4
+    assert s.max_endpointing_delay == 5.0
+    assert s.tool_timeout_seconds == 4.0
+
+
+def test_latency_overrides(monkeypatch):
+    monkeypatch.setenv("BACKEND_BASE_URL", "http://x")
+    monkeypatch.setenv("INTERNAL_API_KEY", "k")
+    monkeypatch.setenv("TURN_DETECTION", "vad")
+    monkeypatch.setenv("MIN_ENDPOINTING_DELAY", "0.6")
+    monkeypatch.setenv("MAX_ENDPOINTING_DELAY", "8")
+    monkeypatch.setenv("TOOL_TIMEOUT_SECONDS", "2.5")
+
+    s = Settings.load()
+    assert s.turn_detection == "vad"
+    assert s.min_endpointing_delay == 0.6
+    assert s.max_endpointing_delay == 8.0
+    assert s.tool_timeout_seconds == 2.5

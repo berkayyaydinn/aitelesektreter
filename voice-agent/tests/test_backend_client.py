@@ -79,6 +79,44 @@ async def test_report_call_event_swallows_errors():
     await client.aclose()
 
 
+async def test_default_timeout_is_granular():
+    # Genel istekler: connect 3s, read 10s, write 5s, pool 3s (düz 10s yerine).
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, json={"tenantId": "t1"})
+
+    client = _client(handler)
+    await client.get_tenant_by_did("08501112233")
+    assert captured["timeout"] == {"connect": 3.0, "read": 10.0, "write": 5.0, "pool": 3.0}
+    await client.aclose()
+
+
+async def test_tool_calls_use_short_timeout():
+    # Konuşma içi araçlar: settings.tool_timeout_seconds (varsayılan 4.0) —
+    # backend takılırsa 10 sn ölü hava yerine hızlı fallback.
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["timeout"] = request.extensions.get("timeout")
+        return httpx.Response(200, json={"slots": [], "status": "booked",
+                                         "orderId": "o1", "invoiceId": "i1"})
+
+    client = _client(handler)
+    for call in (
+        lambda: client.check_availability("t1", "s1", "2026-06-15"),
+        lambda: client.create_appointment({"tenantId": "t1"}),
+        lambda: client.create_order({"tenantId": "t1"}),
+        lambda: client.create_invoice({"tenantId": "t1"}),
+    ):
+        captured.clear()
+        await call()
+        assert captured["timeout"]["read"] == 4.0, "araç çağrısı kısa timeout kullanmalı"
+        assert captured["timeout"]["connect"] == 3.0
+    await client.aclose()
+
+
 async def test_raises_on_http_error():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404)

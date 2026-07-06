@@ -21,8 +21,16 @@ class BackendClient:
         self._http = httpx.AsyncClient(
             base_url=settings.backend_base_url,
             headers={"X-Internal-Key": settings.internal_api_key},
-            timeout=10.0,
+            # Granüler timeout: takılan connect 10 sn beklemesin; read genel istekler için geniş.
+            timeout=httpx.Timeout(connect=3.0, read=10.0, write=5.0, pool=3.0),
             transport=transport,
+        )
+        # Konuşma içi araç çağrıları: backend takılırsa uzun ölü hava yerine hızlı fallback.
+        self._tool_timeout = httpx.Timeout(
+            connect=3.0,
+            read=settings.tool_timeout_seconds,
+            write=settings.tool_timeout_seconds,
+            pool=settings.tool_timeout_seconds,
         )
 
     async def aclose(self) -> None:
@@ -39,24 +47,31 @@ class BackendClient:
         resp = await self._http.post(
             "/internal/availability",
             json={"tenantId": tenant_id, "serviceId": service_id, "date": date},
+            timeout=self._tool_timeout,
         )
         resp.raise_for_status()
         return resp.json().get("slots", [])
 
     async def create_appointment(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Randevu oluştur (backend çakışmayı doğrular)."""
-        resp = await self._http.post("/internal/appointments", json=payload)
+        resp = await self._http.post(
+            "/internal/appointments", json=payload, timeout=self._tool_timeout
+        )
         resp.raise_for_status()
         return resp.json()
 
     async def create_order(self, payload: dict[str, Any]) -> dict[str, Any]:
-        resp = await self._http.post("/internal/orders", json=payload)
+        resp = await self._http.post(
+            "/internal/orders", json=payload, timeout=self._tool_timeout
+        )
         resp.raise_for_status()
         return resp.json()
 
     async def create_invoice(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Fatura kes (backend sahip doğrular; yetkisizse 403)."""
-        resp = await self._http.post("/internal/invoices", json=payload)
+        resp = await self._http.post(
+            "/internal/invoices", json=payload, timeout=self._tool_timeout
+        )
         resp.raise_for_status()
         return resp.json()
 

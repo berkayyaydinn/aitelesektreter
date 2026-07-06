@@ -1,6 +1,7 @@
-# LiveKit Agents ses hattı
-livekit-agents>=0.11
-livekit-plugins-silero>=0.7        # VAD / turn detection
+# LiveKit Agents ses hattı (1.x: prewarm, preemptive_generation, turn_detection)
+livekit-agents>=1.0
+livekit-plugins-silero>=1.0        # VAD
+livekit-plugins-turn-detector>=1.0 # model tabanlı sıra tespiti (TURN_DETECTION=multilingual)
 
 # Swappable provider eklentileri (.env ile seçilir; sadece kullanılanı kur)
 livekit-plugins-deepgram>=0.6      # STT (Türkçe)

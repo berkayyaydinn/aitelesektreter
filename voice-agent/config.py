@@ -27,6 +27,12 @@ class Settings:
     tts_provider: str
     llm_model: str
 
+    # Gecikme ayarı: turn detection modeli + endpointing penceresi + araç timeout'u.
+    turn_detection: str
+    min_endpointing_delay: float
+    max_endpointing_delay: float
+    tool_timeout_seconds: float
+
     @staticmethod
     def load() -> "Settings":
         return Settings(
@@ -37,6 +43,10 @@ class Settings:
             llm_provider=os.getenv("LLM_PROVIDER", "openai"),
             tts_provider=os.getenv("TTS_PROVIDER", "azure"),
             llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            turn_detection=os.getenv("TURN_DETECTION", "multilingual"),
+            min_endpointing_delay=float(os.getenv("MIN_ENDPOINTING_DELAY", "0.4")),
+            max_endpointing_delay=float(os.getenv("MAX_ENDPOINTING_DELAY", "5.0")),
+            tool_timeout_seconds=float(os.getenv("TOOL_TIMEOUT_SECONDS", "4.0")),
         )
 
 

@@ -10,6 +10,7 @@ Provider'lar (STT/LLM/TTS) swappable — agent bu dosyada hangi sağlayıcı old
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -33,6 +34,28 @@ logger = logging.getLogger("telesekreter")
 
 def _recording_enabled() -> bool:
     return os.getenv("RECORDING_ENABLED", "false").strip().lower() in ("1", "true", "yes")
+
+
+def prewarm(proc: agents.JobProcess) -> None:
+    """Worker process başlarken bir kez çalışır — VAD modelini önceden yükler.
+
+    Aksi halde her çağrıda silero.VAD.load() (~saniyeler) karşılamayı geciktirir.
+    """
+    proc.userdata["vad"] = silero.VAD.load()
+
+
+def _build_turn_detection():
+    """TURN_DETECTION=multilingual → model tabanlı sıra tespiti (Türkçe destekli);
+    aksi halde 'vad' (yalnız sessizlik). Model importu başarısızsa vad'a düşer."""
+    if settings.turn_detection != "multilingual":
+        return "vad"
+    try:
+        from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
+        return MultilingualModel()
+    except Exception:  # noqa: BLE001 — model yoksa çağrı yine de çalışsın
+        logger.warning("Multilingual turn detector yüklenemedi, 'vad'a düşülüyor", exc_info=True)
+        return "vad"
 
 
 async def _start_recording(ctx: JobContext, state: dict) -> None:
@@ -104,20 +127,24 @@ async def entrypoint(ctx: JobContext) -> None:
         is_owner = bool(caller) and caller == tenant.get("ownerPhone")
         logger.info("Çağrı: DID=%s tenant=%s sahip=%s", did, tenant.get("tenantId"), is_owner)
 
-        started = await backend.report_call_event(
-            {
-                "tenantId": tenant["tenantId"],
-                "did": did,
-                "event": "call_started",
-                "consent": "call_recording_notified",
-            }
-        )
-        # Doğru kayda yapışsın diye callLogId'yi yakala (yoksa backend latest-open lookup'a düşer).
-        call_log_id = (started or {}).get("callLogId")
-
         # Kayıt + session: on_shutdown bunları çağrı anında okur (closure), önce None.
         recording: dict = {"url": None, "egress_id": None}
         session = None
+
+        # call_started ve kayıt başlatma birbirinden bağımsız — paralel (gecikme kazanımı).
+        started, _ = await asyncio.gather(
+            backend.report_call_event(
+                {
+                    "tenantId": tenant["tenantId"],
+                    "did": did,
+                    "event": "call_started",
+                    "consent": "call_recording_notified",
+                }
+            ),
+            _start_recording(ctx, recording),
+        )
+        # Doğru kayda yapışsın diye callLogId'yi yakala (yoksa backend latest-open lookup'a düşer).
+        call_log_id = (started or {}).get("callLogId")
 
         async def on_shutdown() -> None:
             # Çağrı bitişi: transkript + analitik topla (best-effort), bildir, istemciyi kapat.
@@ -145,9 +172,6 @@ async def entrypoint(ctx: JobContext) -> None:
         ctx.add_shutdown_callback(on_shutdown)
         shutdown = on_shutdown
 
-        # Çağrı kaydı (opsiyonel, RECORDING_ENABLED ile) — best-effort, çağrıyı bloklamaz.
-        await _start_recording(ctx, recording)
-
         tenant_tools = build_tools(backend, tenant["tenantId"])
         instructions = build_system_prompt(tenant)
         if is_owner:
@@ -158,10 +182,17 @@ async def entrypoint(ctx: JobContext) -> None:
 
         tts = build_tts(settings.tts_provider, settings.speech_language)
         session = AgentSession(
-            vad=silero.VAD.load(),
+            # prewarm ile yüklenen VAD (yoksa lokal yükleme — dev/test yolu).
+            vad=ctx.proc.userdata.get("vad") or silero.VAD.load(),
             stt=build_stt(settings.stt_provider, settings.speech_language),
             llm=build_llm(settings.llm_provider, settings.llm_model),
             tts=tts,
+            # Gecikme: model tabanlı sıra tespiti + kullanıcı konuşurken LLM'i önceden başlat.
+            turn_detection=_build_turn_detection(),
+            preemptive_generation=True,
+            min_endpointing_delay=settings.min_endpointing_delay,
+            max_endpointing_delay=settings.max_endpointing_delay,
+            allow_interruptions=True,
         )
 
         await session.start(
@@ -189,4 +220,4 @@ async def entrypoint(ctx: JobContext) -> None:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
