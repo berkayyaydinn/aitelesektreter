@@ -7,6 +7,9 @@ public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+    /// <summary>Türetilmiş provider context'leri için (MySqlAppDbContext kendi options tipini taşır).</summary>
+    protected AppDbContext(DbContextOptions options) : base(options) { }
+
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<PhoneNumber> PhoneNumbers => Set<PhoneNumber>();
     public DbSet<Service> Services => Set<Service>();

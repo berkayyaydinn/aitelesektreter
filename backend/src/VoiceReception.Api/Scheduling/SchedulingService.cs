@@ -9,11 +9,13 @@ public class SchedulingService
 {
     private readonly AppDbContext _db;
     private readonly TimeProvider _clock;
+    private readonly IBookingLock _bookingLock;
 
-    public SchedulingService(AppDbContext db, TimeProvider clock)
+    public SchedulingService(AppDbContext db, TimeProvider clock, IBookingLock bookingLock)
     {
         _db = db;
         _clock = clock;
+        _bookingLock = bookingLock;
     }
 
     /// <summary>Çalışma saatleri içinde, dolu/geçmiş slotları çıkararak uygun slotları üretir.</summary>
@@ -81,35 +83,50 @@ public class SchedulingService
         if (startUtc < openUtc || endUtc > closeUtc)
             return new BookingResult(BookingOutcome.OutsideBusinessHours, null);
 
-        if (await HasOverlapAsync(tenantId, startUtc, endUtc, ct))
-            return new BookingResult(BookingOutcome.Conflict, null);
-
-        var appt = new Appointment
-        {
-            TenantId = tenantId,
-            ServiceId = serviceId,
-            StartUtc = startUtc,
-            EndUtc = endUtc,
-            CustomerName = customerName,
-            CustomerPhone = customerPhone,
-        };
-        _db.Appointments.Add(appt);
-
+        // Kilit + overlap kontrolü + insert tek pencerede: MySQL'de (constraint yok) TOCTOU'yu
+        // GET_LOCK kapatır; Postgres/SQLite'ta kilit no-op, garanti exclusion constraint'te.
+        IAsyncDisposable bookingLock;
         try
         {
-            await _db.SaveChangesAsync(ct);
+            bookingLock = await _bookingLock.AcquireAsync(tenantId, ct);
         }
-        catch (DbUpdateException)
+        catch (BookingLockTimeoutException)
         {
-            // Postgres exclusion constraint eşzamanlı çakışmayı reddetti (TOCTOU). Kaydı geri al,
-            // gerçekten örtüşme varsa Conflict; değilse beklenmeyen hata → rethrow.
-            _db.Entry(appt).State = EntityState.Detached;
-            if (await HasOverlapAsync(tenantId, startUtc, endUtc, ct))
-                return new BookingResult(BookingOutcome.Conflict, null);
-            throw;
+            return new BookingResult(BookingOutcome.Conflict, null); // güvenli taraf: rezervasyonu reddet
         }
 
-        return new BookingResult(BookingOutcome.Booked, appt);
+        await using (bookingLock)
+        {
+            if (await HasOverlapAsync(tenantId, startUtc, endUtc, ct))
+                return new BookingResult(BookingOutcome.Conflict, null);
+
+            var appt = new Appointment
+            {
+                TenantId = tenantId,
+                ServiceId = serviceId,
+                StartUtc = startUtc,
+                EndUtc = endUtc,
+                CustomerName = customerName,
+                CustomerPhone = customerPhone,
+            };
+            _db.Appointments.Add(appt);
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Postgres exclusion constraint eşzamanlı çakışmayı reddetti (TOCTOU). Kaydı geri al,
+                // gerçekten örtüşme varsa Conflict; değilse beklenmeyen hata → rethrow.
+                _db.Entry(appt).State = EntityState.Detached;
+                if (await HasOverlapAsync(tenantId, startUtc, endUtc, ct))
+                    return new BookingResult(BookingOutcome.Conflict, null);
+                throw;
+            }
+
+            return new BookingResult(BookingOutcome.Booked, appt);
+        }
     }
 
     private Task<bool> HasOverlapAsync(Guid tenantId, DateTime startUtc, DateTime endUtc, CancellationToken ct) =>

@@ -37,8 +37,8 @@ public class SchedulingServiceTests : IDisposable
         Seed();
     }
 
-    /// <summary>Belirtilen "şimdi" ile bir SchedulingService örneği.</summary>
-    private SchedulingService Sut(DateTime nowUtc) => new(_db, new TestTimeProvider(nowUtc));
+    /// <summary>Belirtilen "şimdi" ile bir SchedulingService örneği (SQLite: no-op kilit).</summary>
+    private SchedulingService Sut(DateTime nowUtc) => new(_db, new TestTimeProvider(nowUtc), new NoopBookingLock());
 
     private void Seed()
     {

@@ -50,9 +50,14 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DB_PROVIDER: postgres
-      # Container ağı: host = postgres servis adı (yayınlanan porta gerek yok).
-      DATABASE_URL: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      # postgres (varsayılan) | mysql. MySQL'e geçiş için .env'de:
+      #   BACKEND_DB_PROVIDER=mysql
+      #   BACKEND_DATABASE_URL="Server=mysql;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD}"
+      DB_PROVIDER: ${BACKEND_DB_PROVIDER:-postgres}
+      # Container ağı: host = postgres/mysql servis adı (yayınlanan porta gerek yok).
+      DATABASE_URL: ${BACKEND_DATABASE_URL:-Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}}
+      # MySQL'de startup'ta sürüm AutoDetect bağlantısını atlamak için (compose imajı mysql:8).
+      MYSQL_SERVER_VERSION: ${MYSQL_SERVER_VERSION:-8.0.36}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       # Opsiyonel: tenant'a kısıtlı admin anahtarları "guid:key,guid:key" (CRM çok-tenant için).
       INTERNAL_TENANT_KEYS: ${INTERNAL_TENANT_KEYS:-}
@@ -82,6 +87,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mysql:
+        condition: service_healthy   # BACKEND_DB_PROVIDER=mysql seçilirse hazır olsun (stack'te zaten var)
     expose:
       - "8080"   # yalnız iç ağ; dışarıya Caddy açar
 

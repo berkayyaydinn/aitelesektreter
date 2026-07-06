@@ -77,7 +77,8 @@ cd backend && dotnet test tests/VoiceReception.Tests/VoiceReception.Tests.csproj
 Önce **spike**'ları doğrula (`docs/spikes.md`), sonra gerçek bağımlılıklara geç:
 
 ```bash
-# Backend: .env -> DB_PROVIDER=postgres + DATABASE_URL, MESSAGING_PROVIDER=whatsapp_cloud + token
+# Backend: .env -> DB_PROVIDER=postgres|mysql + DATABASE_URL (bkz. docs/veritabani-saglayicilari.md),
+#          MESSAGING_PROVIDER=whatsapp_cloud + token
 cd backend && cp .env.example .env && dotnet run --project src/VoiceReception.Api
 
 # Voice worker

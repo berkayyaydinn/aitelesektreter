@@ -21,10 +21,11 @@ builder.Configuration.AddEnvironmentVariables();
 
 // --- Veritabanı sağlayıcı anahtarı (swappable) ---
 // DB_PROVIDER=sqlite  -> lokal test, Postgres/Docker gerektirmez (varsayılan)
-// DB_PROVIDER=postgres -> üretim
+// DB_PROVIDER=postgres -> üretim (exclusion constraint dahil tam DB garantisi)
+// DB_PROVIDER=mysql   -> üretim alternatifi (çakışma koruması GET_LOCK ile, bkz. MySqlBookingLock)
 var dbProvider = (builder.Configuration["DB_PROVIDER"] ?? "sqlite").ToLowerInvariant();
 
-builder.Services.AddDbContext<AppDbContext>(o =>
+void ConfigureDb(DbContextOptionsBuilder o)
 {
     // Soft-delete query filter + required PhoneNumber→Tenant ilişkisi uyarısını bastır:
     // silinen tenant'ta by-did'in null dönmesi BEKLENEN davranış (DID routing durur).
@@ -36,12 +37,35 @@ builder.Services.AddDbContext<AppDbContext>(o =>
             ?? throw new InvalidOperationException("DB_PROVIDER=postgres için DATABASE_URL gerekli");
         o.UseNpgsql(cs);
     }
+    else if (dbProvider == "mysql")
+    {
+        var cs = builder.Configuration["DATABASE_URL"]
+            ?? throw new InvalidOperationException("DB_PROVIDER=mysql için DATABASE_URL gerekli");
+        // MYSQL_SERVER_VERSION verilirse startup'ta DB'ye bağlanmadan sürüm bilinir (örn. "8.0.36").
+        var sv = builder.Configuration["MYSQL_SERVER_VERSION"] is { Length: > 0 } v
+            ? ServerVersion.Parse(v)
+            : ServerVersion.AutoDetect(cs);
+        o.UseMySql(cs, sv);
+    }
     else
     {
         var cs = builder.Configuration["SQLITE_PATH"] ?? "Data Source=app.db";
         o.UseSqlite(cs);
     }
-});
+}
+
+if (dbProvider == "mysql")
+{
+    // Türetilmiş context: MySQL migration'ları (Migrations/MySql) Postgres setinden ayrı yaşar.
+    // Servisler AppDbContext enjekte etmeye devam eder — ikisi aynı scoped instance'ı görür.
+    builder.Services.AddDbContext<AppDbContext, MySqlAppDbContext>(ConfigureDb);
+    builder.Services.AddScoped<IBookingLock, MySqlBookingLock>();
+}
+else
+{
+    builder.Services.AddDbContext<AppDbContext>(ConfigureDb);
+    builder.Services.AddSingleton<IBookingLock, NoopBookingLock>();
+}
 
 builder.Services.AddSingleton(TimeProvider.System); // SchedulingService saat kaynağı (geçmiş slot/randevu filtresi)
 builder.Services.AddScoped<SchedulingService>();
@@ -143,11 +167,11 @@ var app = builder.Build();
 
 app.UseRateLimiter();
 
-// Şema hazırla: SQLite lokal -> EnsureCreated (migration gerekmez); Postgres -> Migrate.
+// Şema hazırla: SQLite lokal -> EnsureCreated (migration gerekmez); Postgres/MySQL -> Migrate.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (dbProvider == "postgres") db.Database.Migrate();
+    if (dbProvider is "postgres" or "mysql") db.Database.Migrate();
     else db.Database.EnsureCreated();
 }
 
