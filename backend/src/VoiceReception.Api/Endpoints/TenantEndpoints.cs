@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using VoiceReception.Api.Data;
 using VoiceReception.Api.Domain;
+using VoiceReception.Api.Retention;
 
 namespace VoiceReception.Api.Endpoints;
 
@@ -152,6 +153,64 @@ public static class TenantEndpoints
             await db.SaveChangesAsync(ct);
             return Results.NoContent();
         });
+
+        // DSAR (KVKK m.11): bir telefonun PII izini tenant kapsamında anonimleştir. Idempotent.
+        admin.MapPost("/{tenantId:guid}/dsar/erase", DsarEraseAsync);
+    }
+
+    /// <summary>Telefonun PII izini siler/anonimleştirir; tablo başına sayı döner.
+    /// Consent (rıza ispatı) ve Invoice (VUK 5 yıl) bilinçli olarak korunur.</summary>
+    private static async Task<IResult> DsarEraseAsync(
+        Guid tenantId, DsarEraseBody body, AppDbContext db, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(body.Phone))
+            return Results.BadRequest(new { error = "phone zorunlu" });
+        if (!await db.Tenants.AnyAsync(t => t.Id == tenantId, ct))
+            return Results.NotFound();
+
+        // Çağrı logları: telefon anonim + transkript (ConversationTurn) tamamen silinir.
+        var calls = await db.CallLogs
+            .Where(c => c.TenantId == tenantId && c.CustomerPhone == body.Phone)
+            .ToListAsync(ct);
+        var callIds = calls.Select(c => c.Id).ToList();
+        var turns = await db.ConversationTurns
+            .Where(t => callIds.Contains(t.CallLogId)).ToListAsync(ct);
+        db.ConversationTurns.RemoveRange(turns);
+        foreach (var c in calls) c.CustomerPhone = RetentionDefaults.Anonymized;
+
+        // Randevu/sipariş: ad + telefon anonim, satır kalır. Soft-delete edilmişler dahil.
+        var appointments = await db.Appointments.IgnoreQueryFilters()
+            .Where(a => a.TenantId == tenantId && a.CustomerPhone == body.Phone)
+            .ToListAsync(ct);
+        foreach (var a in appointments)
+        {
+            a.CustomerName = RetentionDefaults.Anonymized;
+            a.CustomerPhone = string.Empty;
+        }
+        var orders = await db.Orders.IgnoreQueryFilters()
+            .Where(o => o.TenantId == tenantId && o.CustomerPhone == body.Phone)
+            .ToListAsync(ct);
+        foreach (var o in orders)
+        {
+            o.CustomerName = RetentionDefaults.Anonymized;
+            o.CustomerPhone = string.Empty;
+        }
+
+        var messages = await db.MessageLogs
+            .Where(m => m.TenantId == tenantId && m.ToPhone == body.Phone)
+            .ToListAsync(ct);
+        foreach (var m in messages) m.ToPhone = RetentionDefaults.Anonymized;
+
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(new
+        {
+            callLogsAnonymized = calls.Count,
+            turnsDeleted = turns.Count,
+            appointmentsAnonymized = appointments.Count,
+            ordersAnonymized = orders.Count,
+            messageLogsAnonymized = messages.Count,
+        });
     }
 
     public record CreateTenantBody(
@@ -162,4 +221,5 @@ public static class TenantEndpoints
     public record UpdateTenantBody(
         string BusinessName, string? ExtraPrompt, string? OwnerPhone, bool? IsActive,
         string? PromptTemplate = null);
+    public record DsarEraseBody(string Phone);
 }
