@@ -7,8 +7,18 @@ Netgsm SIP hattını **yalnız gelen çağrı** için canlıya alma sırası. Gi
 > **Kapsam:** yalnız inbound. Sonradan giden SMS/arama eklersen İYS + msgheader devreye girer →
 > o zaman tam SOP **Bölüm 3**'e ve [compliance-iys.md](compliance-iys.md)'ye dön.
 
-> Komut örneklerinde `$BASE` = `https://<domain-veya-ip>`, `$KEY` = `INTERNAL_API_KEY`.
-> Kabuğa bir kez tanımla: `BASE=https://api.firma.com ; KEY=<internal_api_key>`.
+## Ortam Değişkenlerini Tanımla
+
+Kabuğa bir kez yapıştır — tüm komutlarda otomatik dönüşür:
+
+```bash
+export VPS_IP="<VPS_PUBLIC_IP>"                      # curl -4 https://api.ipify.org
+export DOMAIN="api.firma.com"                        # (opsiyonel; IP'ye doğrudan)
+export BASE="https://$DOMAIN"                        # veya "https://$VPS_IP"
+export KEY="<INTERNAL_API_KEY>"                      # infra/compose/.env
+export DID="0850XXXXXXX"                             # Netgsm DID
+export NETGSM_SIP_IP="<NETGSM_SIP_SUNUCU_IP>"       # Netgsm ticket'ından
+```
 
 Her adımın bir **çıkış kapısı (gate)** vardır — kapı geçilmeden sonraki adıma geçme.
 
