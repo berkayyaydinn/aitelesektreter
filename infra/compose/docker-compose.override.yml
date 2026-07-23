@@ -2,11 +2,14 @@
 # docker compose bu dosyayı otomatik yükler. Gerektirir Docker Compose v2.24+ (!reset/!override).
 #
 # Devre dışı bırakılanlar (profil atanınca varsayılan `up` başlatmaz):
-#   mysql (CRM yok), whisper-stt/piper-tts (bulut STT/TTS), minio/minio-init/livekit-egress (kayıt kapalı).
-# Etkin kalanlar: postgres, backend, voice-agent, redis, livekit, livekit-sip, caddy, backup.
+#   mysql (CRM yok), whisper-stt/piper-tts (bulut STT/TTS), minio/minio-init/livekit-egress (kayıt kapalı),
+#   caddy (sunucuda 80/443'ü mevcut nginx kullanıyor — API vhost nginx'te, TLS certbot).
+# Etkin kalanlar: postgres, backend, voice-agent, redis, livekit, livekit-sip, backup.
 
 services:
   backend:
+    ports:
+      - "127.0.0.1:8080:8080"   # nginx reverse proxy hedefi (dışarı kapalı)
     depends_on: !reset
       postgres:
         condition: service_healthy
@@ -40,6 +43,9 @@ services:
 
   livekit-egress:
     profiles: ["recording"]
+
+  caddy:
+    profiles: ["proxy-caddy"]
 
   # Docker'ın yayınladığı portlar UFW'yi bypass eder — LiveKit WS/TCP dışarı kapalı olsun.
   livekit:
