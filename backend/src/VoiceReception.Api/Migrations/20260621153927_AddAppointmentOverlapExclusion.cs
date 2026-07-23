@@ -23,7 +23,7 @@ namespace VoiceReception.Api.Migrations
                 ALTER TABLE ""Appointments"" ADD CONSTRAINT ""appt_no_overlap""
                 EXCLUDE USING gist (
                     ""TenantId"" WITH =,
-                    tsrange(""StartUtc"", ""EndUtc"") WITH &&
+                    tstzrange(""StartUtc"", ""EndUtc"") WITH &&
                 ) WHERE (""Status"" = 0);");
         }
 
