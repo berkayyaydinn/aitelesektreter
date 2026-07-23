@@ -48,8 +48,18 @@ services:
     profiles: ["proxy-caddy"]
 
   # Docker'ın yayınladığı portlar UFW'yi bypass eder — LiveKit WS/TCP dışarı kapalı olsun.
+  # dns: host'un systemd-resolved stub'ı (127.0.0.53) konteynere kopyalanınca çözümleme
+  # kırılıyordu; açık upstream ver (embedded DNS 127.0.0.11 servis adlarını çözmeye devam eder).
   livekit:
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports: !override
       - "127.0.0.1:7880:7880"
       - "127.0.0.1:7881:7881"
       - "50000-60000:50000-60000/udp"
+
+  livekit-sip:
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
