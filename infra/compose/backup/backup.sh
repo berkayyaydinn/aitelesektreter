@@ -14,9 +14,12 @@ while true; do
 	PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h postgres -U "$POSTGRES_USER" "$POSTGRES_DB" \
 		| gzip > "/backups/pg_${ts}.sql.gz" || echo "[backup] postgres dump HATA"
 
-	echo "[backup] ${ts} mysql dump"
-	mysqldump -h mysql -u root -p"$MYSQL_ROOT_PASSWORD" --all-databases \
-		| gzip > "/backups/mysql_${ts}.sql.gz" || echo "[backup] mysql dump HATA"
+	# MySQL yedeği BACKUP_MYSQL=false ile kapatılabilir (CRM/MySQL servisi çalışmıyorsa).
+	if [ "${BACKUP_MYSQL:-true}" = "true" ]; then
+		echo "[backup] ${ts} mysql dump"
+		mysqldump -h mysql -u root -p"$MYSQL_ROOT_PASSWORD" --all-databases \
+			| gzip > "/backups/mysql_${ts}.sql.gz" || echo "[backup] mysql dump HATA"
+	fi
 
 	# Eski yedekleri buda.
 	find /backups -name '*.sql.gz' -mtime "+${RETENTION_DAYS}" -delete 2>/dev/null || true

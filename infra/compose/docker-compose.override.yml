@@ -1,0 +1,49 @@
+# Prod override (bulut AI + PostgreSQL, CRM'siz, kayıtsız).
+# docker compose bu dosyayı otomatik yükler. Gerektirir Docker Compose v2.24+ (!reset/!override).
+#
+# Devre dışı bırakılanlar (profil atanınca varsayılan `up` başlatmaz):
+#   mysql (CRM yok), whisper-stt/piper-tts (bulut STT/TTS), minio/minio-init/livekit-egress (kayıt kapalı).
+# Etkin kalanlar: postgres, backend, voice-agent, redis, livekit, livekit-sip, caddy, backup.
+
+services:
+  backend:
+    depends_on: !reset
+      postgres:
+        condition: service_healthy
+
+  voice-agent:
+    depends_on: !reset
+      - backend
+      - livekit
+
+  backup:
+    environment:
+      BACKUP_MYSQL: "false"
+    depends_on: !reset
+      postgres:
+        condition: service_healthy
+
+  mysql:
+    profiles: ["crm"]
+
+  whisper-stt:
+    profiles: ["selfhost-ai"]
+
+  piper-tts:
+    profiles: ["selfhost-ai"]
+
+  minio:
+    profiles: ["recording"]
+
+  minio-init:
+    profiles: ["recording"]
+
+  livekit-egress:
+    profiles: ["recording"]
+
+  # Docker'ın yayınladığı portlar UFW'yi bypass eder — LiveKit WS/TCP dışarı kapalı olsun.
+  livekit:
+    ports: !override
+      - "127.0.0.1:7880:7880"
+      - "127.0.0.1:7881:7881"
+      - "50000-60000:50000-60000/udp"
