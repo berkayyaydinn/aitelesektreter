@@ -9,7 +9,8 @@ redis:
 sip_port: 5060              # SIP signaling (UDP+TCP) — yalnız Netgsm IP'sine firewall'da aç
 rtp_port_range_start: 10000 # RTP medya UDP aralığı — compose + firewall ile eşleşmeli
 rtp_port_range_end: 20000
-use_external_ip: true       # VPS public IP (NAT arkası RTP için)
+use_external_ip: false      # STUN kapalı — IP elle verildi
+nat_1_to_1_ip: 69.62.107.51 # VPS public IP (RTP SDP'sine yazılır)
 
 logging:
   level: info

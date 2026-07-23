@@ -6,7 +6,8 @@ rtc:
   tcp_port: 7881           # RTC over TCP (UDP engelliyse fallback)
   port_range_start: 50000  # RTC medya UDP aralığı — compose + firewall ile eşleşmeli
   port_range_end: 60000
-  use_external_ip: true    # VPS public IP'sini SDP'ye yaz (NAT arkası medya için)
+  use_external_ip: false   # STUN kapalı — konteyner DNS'i STUN hostlarını çözemiyor
+  node_ip: 69.62.107.51    # VPS public IP (SDP'ye elle yazılır)
 
 redis:
   address: redis:6379      # server + SIP durum paylaşımı (zorunlu)
