@@ -14,7 +14,12 @@ services:
       postgres:
         condition: service_healthy
 
+  # voice-agent bridge ağında; host ağındaki LiveKit'e gateway üzerinden ulaşır.
   voice-agent:
+    environment:
+      LIVEKIT_URL: ws://host.docker.internal:7880
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on: !reset
       - backend
       - livekit
@@ -64,10 +69,3 @@ services:
   redis:
     ports:
       - "127.0.0.1:6379:6379"
-
-  # voice-agent bridge ağında; host'taki LiveKit'e gateway üzerinden ulaşır.
-  voice-agent:
-    environment:
-      LIVEKIT_URL: ws://host.docker.internal:7880
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
