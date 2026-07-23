@@ -47,19 +47,27 @@ services:
   caddy:
     profiles: ["proxy-caddy"]
 
-  # Docker'ın yayınladığı portlar UFW'yi bypass eder — LiveKit WS/TCP dışarı kapalı olsun.
-  # dns: host'un systemd-resolved stub'ı (127.0.0.53) konteynere kopyalanınca çözümleme
-  # kırılıyordu; açık upstream ver (embedded DNS 127.0.0.11 servis adlarını çözmeye devam eder).
+  # LiveKit + SIP host network modunda çalışır (LiveKit'in önerdiği self-host kurulumu):
+  #  - 10k+ UDP portunu docker-proxy ile tek tek publish etmek sunucuyu çökertiyor,
+  #  - 50000-60000 aralığı Linux ephemeral portlarıyla çakışıp bind hatası veriyordu.
+  # Host modunda config'ler 127.0.0.1 üzerinden konuşur (livekit.yaml / sip.yaml).
+  # Dış erişim UFW ile sınırlı: 7880/7881 dışarı kapalı, RTC/RTP/SIP kuralları mevcut.
   livekit:
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    ports: !override
-      - "127.0.0.1:7880:7880"
-      - "127.0.0.1:7881:7881"
-      - "50000-60000:50000-60000/udp"
+    network_mode: host
+    ports: !reset []
 
   livekit-sip:
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
+    network_mode: host
+    ports: !reset []
+
+  # Host ağındaki LiveKit'in redis'e erişimi için 127.0.0.1'e publish.
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  # voice-agent bridge ağında; host'taki LiveKit'e gateway üzerinden ulaşır.
+  voice-agent:
+    environment:
+      LIVEKIT_URL: ws://host.docker.internal:7880
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

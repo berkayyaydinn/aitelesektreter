@@ -109,6 +109,24 @@ public static class TenantEndpoints
             .AddEndpointFilter(InternalKey.Filter)
             .AddEndpointFilter(InternalKey.RequireTenantScope);
 
+        // Tenant listesi (süper-admin paneli). Route'ta {tenantId} yok → scoped anahtar 403, sadece master.
+        admin.MapGet("/", async (AppDbContext db, CancellationToken ct) =>
+        {
+            var tenants = await db.Tenants
+                .OrderBy(t => t.BusinessName)
+                .Select(t => new
+                {
+                    tenantId = t.Id,
+                    businessName = t.BusinessName,
+                    ownerPhone = t.OwnerPhone,
+                    isActive = t.IsActive,
+                    dids = db.PhoneNumbers.Where(p => p.TenantId == t.Id).Select(p => p.Did).ToList(),
+                    serviceCount = db.Services.Count(s => s.TenantId == t.Id),
+                })
+                .ToListAsync(ct);
+            return Results.Ok(tenants);
+        });
+
         // Tenant config oku (panel ön-doldurma + teyit).
         admin.MapGet("/{tenantId:guid}", async (Guid tenantId, AppDbContext db, CancellationToken ct) =>
         {

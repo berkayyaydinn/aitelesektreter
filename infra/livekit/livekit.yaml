@@ -10,7 +10,7 @@ rtc:
   node_ip: 69.62.107.51    # VPS public IP (SDP'ye elle yazılır)
 
 redis:
-  address: redis:6379      # server + SIP durum paylaşımı (zorunlu)
+  address: 127.0.0.1:6379  # host network modunda; redis 127.0.0.1'e publish edilir (override)
 
 logging:
   level: info

@@ -2,9 +2,9 @@
 # docker-compose.yml `livekit-sip` servisi bunu /etc/sip.yaml olarak mount eder.
 # Netgsm SIP trunk → bu servis (5060) → LiveKit server (ws_url) → oda + agent.
 
-ws_url: ws://livekit:7880   # iç ağ; SIP servisi LiveKit server'a buradan bağlanır
+ws_url: ws://127.0.0.1:7880 # host network modunda; LiveKit server aynı host'ta
 redis:
-  address: redis:6379
+  address: 127.0.0.1:6379
 
 sip_port: 5060              # SIP signaling (UDP+TCP) — yalnız Netgsm IP'sine firewall'da aç
 rtp_port_range_start: 10000 # RTP medya UDP aralığı — compose + firewall ile eşleşmeli

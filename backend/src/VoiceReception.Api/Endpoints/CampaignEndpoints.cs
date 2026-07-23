@@ -19,6 +19,25 @@ public static class CampaignEndpoints
             .AddEndpointFilter(InternalKey.Filter)
             .AddEndpointFilter(RequireCampaignScope);
 
+        // Tenant'ın kampanya listesi (süper-admin paneli / CRM).
+        tenant.MapGet("/", async (Guid tenantId, AppDbContext db, CancellationToken ct) =>
+        {
+            if (!await db.Tenants.AnyAsync(t => t.Id == tenantId, ct)) return Results.NotFound();
+            var campaigns = await db.Campaigns.AsNoTracking()
+                .Where(c => c.TenantId == tenantId)
+                .OrderByDescending(c => c.CreatedAt)
+                .Select(c => new
+                {
+                    campaignId = c.Id,
+                    c.Name,
+                    status = c.Status.ToString(),
+                    targetCount = db.CampaignTargets.Count(t => t.CampaignId == c.Id),
+                    c.CreatedAt,
+                })
+                .ToListAsync(ct);
+            return Results.Ok(campaigns);
+        });
+
         // Kampanya oluştur.
         tenant.MapPost("/", async (Guid tenantId, CreateCampaignBody body, AppDbContext db, CancellationToken ct) =>
         {
